@@ -22,7 +22,7 @@ def get_device():
 
 
 class TotalLoss(nn.Module):
-    def __init__(self, content_features: Tensor, style_features: Tensor, alpha: float = 1., beta: float = 1000.):
+    def __init__(self, content_features: Tensor, style_features: List[Tensor], alpha: float = 1., beta: float = 1000.):
         super(TotalLoss, self).__init__()
 
         self.alpha = alpha
@@ -31,8 +31,9 @@ class TotalLoss(nn.Module):
         self.content_loss = ContentLoss(content_features)
         self.style_loss = StyleLoss(style_features)
 
-    def forward(self):
-        total_loss = self.alpha * self.content_loss + self.beta * self.style_loss
+    def forward(self, input_content_features: Tensor, input_style_feature: Tensor):
+        total_loss = self.alpha * self.content_loss(input_content_features) + \
+                     self.beta * self.style_loss(input_style_feature)
         return total_loss
 
 
@@ -53,22 +54,33 @@ class StyleLoss(nn.Module):
 
         self.mse = nn.MSELoss()
         self.style_features = style_features
-        self.style_gram_matrix = torch.cat([gram_matrix(style_feature) for style_feature in self.style_features])
+        self.style_gram_matrix = [gram_matrix(style_feature) for style_feature in self.style_features]
+
+    @property
+    def num_layers(self):
+        return len(self.style_features)  # This will be constant w
 
     def forward(self, input_features: List[Tensor]) -> Tensor:
         assert len(input_features) == len(self.style_gram_matrix), \
             f"Mismatched lengths of features! {len(input_features)} != {len(self.style_features)}"
 
-        return self.mse
+        inputs_gram_matrix = [gram_matrix(inpute_feature) for inpute_feature in input_features]
 
+        style_loss = 0
+        for style_gram, input_gram in zip(self.style_gram_matrix, inputs_gram_matrix):
+            e_l = self.mse(input_gram, style_gram)
+            style_loss += e_l
+
+        return style_loss / self.num_layers
 
 
 def gram_matrix(feature_maps: Tensor, normalize: bool = False) -> Tensor:
     B, C, H, W = feature_maps.size()
 
-    assert B == 1, "Batch size must be 1!"
+    assert B == 1, f"Batch size must be 1! Got B={B}"
 
-    features = feature_maps.view(B * C, H * W)
+    feature_maps = feature_maps.squeeze(0)  # Remove batch_size
+    features = feature_maps.view(C, H * W)
     g = torch.mm(features, features.t())
 
     if normalize:
