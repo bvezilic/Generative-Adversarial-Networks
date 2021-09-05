@@ -2,76 +2,64 @@ from typing import List
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-
-from PIL import Image
-
-import torchvision.transforms as transforms
-import torchvision.models as models
-
-# Pre-trained VGG19
 from torch import Tensor
-
-model = models.vgg19(pretrained=True).features
-
-
-def get_device():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    return device
 
 
 class TotalLoss(nn.Module):
-    def __init__(self, content_features: Tensor, style_features: List[Tensor], alpha: float = 1., beta: float = 1000.):
+    def __init__(self,
+                 content_features: List[Tensor],
+                 style_features: List[Tensor],
+                 alpha: float = 1.,
+                 beta: float = 1000.):
         super(TotalLoss, self).__init__()
 
         self.alpha = alpha
         self.beta = beta
 
-        self.content_loss = ContentLoss(content_features)
-        self.style_loss = StyleLoss(style_features)
+        self.content_losses = [ContentLoss(feature) for feature in content_features]
+        self.style_losses = [StyleLoss(feature) for feature in style_features]
 
-    def forward(self, input_content_features: Tensor, input_style_feature: Tensor):
-        total_loss = self.alpha * self.content_loss(input_content_features) + \
-                     self.beta * self.style_loss(input_style_feature)
+    def forward(self, input_content_features: List[Tensor], input_style_features: List[Tensor]):
+
+        assert len(self.content_losses) == len(input_content_features), \
+            f"Mismatched lengths of content features: Expected {len(self.content_losses)} got {len(input_content_features)}"
+        assert len(self.style_losses) == len(input_style_features), \
+            f"Mismatched lengths of style features: Expected {len(self.content_losses)} got {len(input_style_features)}"
+
+        total_content_loss = 0
+        total_style_loss = 0
+
+        for content_loss, input_content_feature in zip(self.content_losses, input_content_features):
+            total_content_loss += content_loss(input_content_feature)
+
+        for style_loss, input_style_feature in zip(self.style_losses, input_style_features):
+            total_style_loss += style_loss(input_style_feature) / len(input_style_features)  # Normalization factor W
+
+        total_loss = self.alpha * total_content_loss + self.beta * total_style_loss
         return total_loss
 
 
 class ContentLoss(nn.Module):
-    def __init__(self, content_features: Tensor):
+    def __init__(self, content_feature: Tensor):
         super(ContentLoss, self).__init__()
 
         self.mse = nn.MSELoss()
-        self.content_features = content_features
+        self.register_buffer('content_feature', content_feature)
 
     def forward(self, input_features: Tensor) -> Tensor:
-        return self.mse(input_features, self.content_features)
+        return self.mse(input_features, self.content_feature)
 
 
 class StyleLoss(nn.Module):
-    def __init__(self, style_features: List[Tensor]):
+    def __init__(self, style_feature: Tensor):
         super(StyleLoss, self).__init__()
 
         self.mse = nn.MSELoss()
-        self.style_features = style_features
-        self.style_gram_matrix = [gram_matrix(style_feature) for style_feature in self.style_features]
+        self.register_buffer('style_gram', gram_matrix(style_feature))
 
-    @property
-    def num_layers(self):
-        return len(self.style_features)  # This will be constant w
-
-    def forward(self, input_features: List[Tensor]) -> Tensor:
-        assert len(input_features) == len(self.style_gram_matrix), \
-            f"Mismatched lengths of features! {len(input_features)} != {len(self.style_features)}"
-
-        inputs_gram_matrix = [gram_matrix(inpute_feature) for inpute_feature in input_features]
-
-        style_loss = 0
-        for style_gram, input_gram in zip(self.style_gram_matrix, inputs_gram_matrix):
-            e_l = self.mse(input_gram, style_gram)
-            style_loss += e_l
-
-        return style_loss / self.num_layers
+    def forward(self, input_feature: Tensor) -> Tensor:
+        input_gram = gram_matrix(input_feature)
+        return self.mse(input_gram, self.style_gram)
 
 
 def gram_matrix(feature_maps: Tensor, normalize: bool = False) -> Tensor:
