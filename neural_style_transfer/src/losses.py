@@ -19,12 +19,12 @@ class TotalLoss(nn.Module):
         self.content_losses = [ContentLoss(feature) for feature in content_features]
         self.style_losses = [StyleLoss(feature) for feature in style_features]
 
-    def forward(self, input_content_features: List[Tensor], input_style_features: List[Tensor]):
+    def forward(self, input_content_features: List[Tensor], input_style_features: List[Tensor]) -> Tensor:
 
         assert len(self.content_losses) == len(input_content_features), \
             f"Mismatched lengths of content features: Expected {len(self.content_losses)} got {len(input_content_features)}"
         assert len(self.style_losses) == len(input_style_features), \
-            f"Mismatched lengths of style features: Expected {len(self.content_losses)} got {len(input_style_features)}"
+            f"Mismatched lengths of style features: Expected {len(self.style_losses)} got {len(input_style_features)}"
 
         total_content_loss = 0
         total_style_loss = 0
