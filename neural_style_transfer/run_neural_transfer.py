@@ -6,6 +6,7 @@ import torch.optim as optim
 import tqdm
 from src.losses import TotalLoss
 from src.model import VGG19
+from src.transforms import Denormalize
 from config import IMAGE_DIR
 
 
@@ -22,10 +23,12 @@ def run_neural_transfer(
     }
 
     # PREPROCESS
+    mean = [0.485, 0.456, 0.406]
+    std = [0.229, 0.224, 0.225]
     preprocess = Compose([
         ToTensor(),
         Resize(size=(224, 224)),
-        Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        Normalize(mean=mean, std=std),
         Lambda(lambda x: x.unsqueeze(0)),  # Add batch size
     ])
     images = {name: preprocess(image) for name, image in images.items()}
@@ -84,6 +87,7 @@ def run_neural_transfer(
 
     # SAVE INPUT IMAGE
     postprocessing = Compose([
+        Denormalize(mean=mean, std=std),
         Lambda(lambda x: x.squeeze(0)),  # Removes batch dim
         Lambda(lambda x: x.clamp(0, 1)),
         ToPILImage()
