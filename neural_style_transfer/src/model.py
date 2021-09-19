@@ -12,7 +12,7 @@ class VGG19(nn.Module):
                  style_layers: List[int]):
         super(VGG19, self).__init__()
 
-        self.model = models.vgg19(pretrained=True).features
+        self.pretrained_vgg19 = models.vgg19(pretrained=True).features
 
         self.content_layers = content_layers
         self.style_layers = style_layers
@@ -21,7 +21,7 @@ class VGG19(nn.Module):
         self.style_features = OrderedDict({})
 
         # Register hooks to obtain various inputs
-        for idx, module in enumerate(self.model.children()):
+        for idx, module in enumerate(self.pretrained_vgg19.children()):
             if idx in self.content_layers:
                 module.register_forward_hook(self._get_content_activation(idx))
 
@@ -49,7 +49,7 @@ class VGG19(nn.Module):
         return {idx: feature.clone() for idx, feature in features.items()}
 
     def forward(self, input_image: Tensor) -> (Tensor, Dict[int, Tensor], Dict[int, Tensor]):
-        x = self.model(input_image)
+        x = self.pretrained_vgg19(input_image)
 
         content_features = self.clone_features(self.content_features)
         style_features = self.clone_features(self.style_features)
