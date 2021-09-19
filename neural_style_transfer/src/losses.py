@@ -44,21 +44,22 @@ class ContentLoss(nn.Module):
         super(ContentLoss, self).__init__()
 
         self.mse = nn.MSELoss()
-        self.register_buffer('content_feature', content_feature)
+        self.register_buffer('content_feature', content_feature.detach())
 
     def forward(self, input_features: Tensor) -> Tensor:
         return self.mse(input_features, self.content_feature)
 
 
 class StyleLoss(nn.Module):
-    def __init__(self, style_feature: Tensor):
+    def __init__(self, style_feature: Tensor, normalize_gram_matrix=False):
         super(StyleLoss, self).__init__()
 
+        self.normalize_gram_matrix = normalize_gram_matrix
         self.mse = nn.MSELoss()
-        self.register_buffer('style_gram', gram_matrix(style_feature))
+        self.register_buffer('style_gram', gram_matrix(style_feature.detach(), normalize=self.normalize_gram_matrix))
 
     def forward(self, input_feature: Tensor) -> Tensor:
-        input_gram = gram_matrix(input_feature)
+        input_gram = gram_matrix(input_feature, normalize=self.normalize_gram_matrix)
         return self.mse(input_gram, self.style_gram)
 
 

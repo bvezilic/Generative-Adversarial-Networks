@@ -10,3 +10,4 @@ dependencies:
   - torchaudio
   - cudatoolkit=10.2
   - tqdm
+  - jupyterlab

@@ -25,9 +25,11 @@ def run_neural_transfer(
     # PREPROCESS
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
+    new_size = (256, 256)
+
     preprocess = Compose([
         ToTensor(),
-        Resize(size=(224, 224)),
+        Resize(size=new_size),
         Normalize(mean=mean, std=std),
         Lambda(lambda x: x.unsqueeze(0)),  # Add batch size
     ])
@@ -58,7 +60,12 @@ def run_neural_transfer(
     # LOSS FUNCTION
     _, content_features, _ = model(images['content_image'])
     _, _, style_features = model(images['style_image'])
-    loss_criterion = TotalLoss(content_features.values(), style_features.values())
+    loss_criterion = TotalLoss(
+        content_features=content_features.values(),
+        style_features=style_features.values(),
+        alpha=1.,
+        beta=1000
+    )
 
     # OPTIMIZER
     images['input_image'].requires_grad_(True)
@@ -66,7 +73,7 @@ def run_neural_transfer(
     optimizer = optim.Adam(params=[images['input_image']])
 
     # FINAL RUN
-    iterations = 10000
+    iterations = 1000
     for i in tqdm.tqdm(range(iterations)):
         # Forward pass
         _, content_features, style_features = model(images['input_image'])
